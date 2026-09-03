@@ -9,6 +9,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -35,3 +37,12 @@ jobs:
         with:
           name: officesplit-release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Publish APK as a release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-${{ github.run_number }}
+          name: OfficeSplit build ${{ github.run_number }}
+          files: build/app/outputs/flutter-apk/app-release.apk
+          prerelease: true
+          target_commitish: ${{ github.sha }}
