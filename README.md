@@ -25,10 +25,12 @@ flutter run
 ## Building the APK
 
 A GitHub Actions workflow (`.github/workflows/build-apk.yml`) builds a
-release APK on every push and uploads it as a workflow artifact named
-`officesplit-release-apk`. You can also build locally:
+release APK per CPU architecture on every push and uploads them as a
+workflow artifact named `officesplit-release-apk` (and as release assets).
+Use `app-arm64-v8a-release.apk` for virtually any phone from the last
+several years. You can also build locally:
 
 ```bash
-flutter build apk --release
-# output: build/app/outputs/flutter-apk/app-release.apk
+flutter build apk --release --split-per-abi
+# output: build/app/outputs/flutter-apk/app-<abi>-release.apk
 ```

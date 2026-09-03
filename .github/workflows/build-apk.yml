@@ -31,18 +31,18 @@ jobs:
 
       - run: flutter test
 
-      - run: flutter build apk --release
+      - run: flutter build apk --release --split-per-abi
 
       - uses: actions/upload-artifact@v4
         with:
           name: officesplit-release-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: build/app/outputs/flutter-apk/*.apk
 
-      - name: Publish APK as a release asset
+      - name: Publish APKs as release assets
         uses: softprops/action-gh-release@v2
         with:
           tag_name: apk-${{ github.run_number }}
           name: OfficeSplit build ${{ github.run_number }}
-          files: build/app/outputs/flutter-apk/app-release.apk
+          files: build/app/outputs/flutter-apk/*.apk
           prerelease: true
           target_commitish: ${{ github.sha }}
