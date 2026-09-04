@@ -88,7 +88,12 @@ class ItemsStep extends StatelessWidget {
                           child: ListTile(
                             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                             onTap: () => _editItem(context, item),
-                            title: Text(item.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                            title: Text(
+                              item.name,
+                              style: const TextStyle(fontWeight: FontWeight.w600),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                             subtitle: item.assigneeIds.isEmpty
                                 ? Text('Unassigned', style: TextStyle(color: scheme.error))
                                 : Padding(

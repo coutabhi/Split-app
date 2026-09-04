@@ -127,10 +127,14 @@ class _HomeScreenState extends State<HomeScreen> {
                         title: Text(
                           _draft!.title.isEmpty ? 'Unfinished split' : _draft!.title,
                           style: TextStyle(color: scheme.onSecondaryContainer, fontWeight: FontWeight.w700),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                         subtitle: Text(
                           'Tap to continue • ${_draft!.people.length} people',
                           style: TextStyle(color: scheme.onSecondaryContainer),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                         trailing: Icon(Icons.arrow_forward, color: scheme.onSecondaryContainer),
                         onTap: () => _startNew(resume: _draft),
@@ -167,32 +171,42 @@ class _HomeScreenState extends State<HomeScreen> {
                               title: Text(
                                 bill.title.isEmpty ? 'Untitled split' : bill.title,
                                 style: const TextStyle(fontWeight: FontWeight.w700),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                               subtitle: Text(
                                 '${DateFormat('d MMM yyyy').format(bill.date)} • ${bill.people.length} people',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              trailing: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    currencyScope.format(bill.grandTotal),
-                                    style: const TextStyle(fontWeight: FontWeight.w800),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  SizedBox(
-                                    height: 22,
-                                    child: Stack(
-                                      children: [
-                                        for (var i = 0; i < bill.people.length.clamp(0, 4); i++)
-                                          Positioned(
-                                            right: i * 14.0,
-                                            child: PersonAvatar(person: bill.people[i], radius: 10),
-                                          ),
-                                      ],
+                              trailing: SizedBox(
+                                width: 84,
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      currencyScope.format(bill.grandTotal),
+                                      style: const TextStyle(fontWeight: FontWeight.w800),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
-                                  ),
-                                ],
+                                    const SizedBox(height: 6),
+                                    SizedBox(
+                                      height: 20,
+                                      width: 20 + (bill.people.length.clamp(1, 4) - 1) * 14.0,
+                                      child: Stack(
+                                        children: [
+                                          for (var i = 0; i < bill.people.length.clamp(0, 4); i++)
+                                            Positioned(
+                                              right: i * 14.0,
+                                              child: PersonAvatar(person: bill.people[i], radius: 10),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),

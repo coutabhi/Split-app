@@ -181,7 +181,12 @@ class _PersonTile extends StatelessWidget {
         child: ListTile(
           contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
           leading: PersonAvatar(person: person),
-          title: Text(person.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+          title: Text(
+            person.name,
+            style: const TextStyle(fontWeight: FontWeight.w600),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
           subtitle: isPayer
               ? Text('Paid the bill', style: TextStyle(color: scheme.primary, fontSize: 12))
               : null,

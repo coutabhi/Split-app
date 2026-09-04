@@ -142,24 +142,36 @@ class _ItemEditorSheetState extends State<ItemEditorSheet> {
                 final selected = _selected.contains(p.id);
                 return GestureDetector(
                   onTap: () => _toggle(p.id),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 150),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: selected ? p.color.withValues(alpha: 0.16) : scheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(
-                        color: selected ? p.color : scheme.outlineVariant,
-                        width: selected ? 1.6 : 1,
-                      ),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: MediaQuery.of(context).size.width - 40,
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        PersonAvatar(person: p, radius: 12, selected: selected, showCheck: true),
-                        const SizedBox(width: 8),
-                        Text(p.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-                      ],
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: selected ? p.color.withValues(alpha: 0.16) : scheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(
+                          color: selected ? p.color : scheme.outlineVariant,
+                          width: selected ? 1.6 : 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          PersonAvatar(person: p, radius: 12, selected: selected, showCheck: true),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              p.name,
+                              style: const TextStyle(fontWeight: FontWeight.w600),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 );
