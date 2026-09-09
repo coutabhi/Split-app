@@ -56,6 +56,29 @@ create table if not exists public.group_members (
   primary key (group_id, user_id)
 );
 
+-- A policy on group_members may not query group_members: evaluating the
+-- subquery re-applies the same policy, which Postgres rejects as infinite
+-- recursion (42P17). Because every other table's policies ask "is this user
+-- in that group?" by reading group_members, that one cycle made groups,
+-- expenses and settlements unreadable too. This helper runs as its owner, so
+-- the lookup inside it is not subject to RLS and the cycle is broken. Every
+-- membership check goes through it.
+create or replace function public.is_group_member(p_group_id uuid)
+returns boolean
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.group_members
+    where group_id = p_group_id and user_id = auth.uid()
+  );
+$$;
+
+revoke all on function public.is_group_member(uuid) from public;
+grant execute on function public.is_group_member(uuid) to authenticated;
+
 -- Join a group by its invite code (bypasses RLS safely via security definer,
 -- since a non-member can't SELECT a group row directly).
 create or replace function public.join_group_by_code(p_code text)
@@ -127,9 +150,7 @@ create policy "users update own profile" on public.profiles
 
 drop policy if exists "members view their groups" on public.groups;
 create policy "members view their groups" on public.groups
-  for select using (
-    exists (select 1 from public.group_members gm where gm.group_id = id and gm.user_id = auth.uid())
-  );
+  for select using (public.is_group_member(id));
 
 drop policy if exists "authenticated users create groups" on public.groups;
 create policy "authenticated users create groups" on public.groups
@@ -137,18 +158,11 @@ create policy "authenticated users create groups" on public.groups
 
 drop policy if exists "members update their groups" on public.groups;
 create policy "members update their groups" on public.groups
-  for update using (
-    exists (select 1 from public.group_members gm where gm.group_id = id and gm.user_id = auth.uid())
-  );
+  for update using (public.is_group_member(id));
 
 drop policy if exists "members view group membership" on public.group_members;
 create policy "members view group membership" on public.group_members
-  for select using (
-    exists (
-      select 1 from public.group_members gm2
-      where gm2.group_id = group_members.group_id and gm2.user_id = auth.uid()
-    )
-  );
+  for select using (public.is_group_member(group_id));
 
 drop policy if exists "users add themselves to a group" on public.group_members;
 create policy "users add themselves to a group" on public.group_members
@@ -160,45 +174,31 @@ create policy "users leave a group" on public.group_members
 
 drop policy if exists "members view group expenses" on public.expenses;
 create policy "members view group expenses" on public.expenses
-  for select using (
-    exists (select 1 from public.group_members gm where gm.group_id = expenses.group_id and gm.user_id = auth.uid())
-  );
+  for select using (public.is_group_member(group_id));
 
 drop policy if exists "members add group expenses" on public.expenses;
 create policy "members add group expenses" on public.expenses
-  for insert with check (
-    exists (select 1 from public.group_members gm where gm.group_id = expenses.group_id and gm.user_id = auth.uid())
-  );
+  for insert with check (public.is_group_member(group_id));
 
 drop policy if exists "members update group expenses" on public.expenses;
 create policy "members update group expenses" on public.expenses
-  for update using (
-    exists (select 1 from public.group_members gm where gm.group_id = expenses.group_id and gm.user_id = auth.uid())
-  );
+  for update using (public.is_group_member(group_id));
 
 drop policy if exists "members delete group expenses" on public.expenses;
 create policy "members delete group expenses" on public.expenses
-  for delete using (
-    exists (select 1 from public.group_members gm where gm.group_id = expenses.group_id and gm.user_id = auth.uid())
-  );
+  for delete using (public.is_group_member(group_id));
 
 drop policy if exists "members view group settlements" on public.settlements;
 create policy "members view group settlements" on public.settlements
-  for select using (
-    exists (select 1 from public.group_members gm where gm.group_id = settlements.group_id and gm.user_id = auth.uid())
-  );
+  for select using (public.is_group_member(group_id));
 
 drop policy if exists "members add group settlements" on public.settlements;
 create policy "members add group settlements" on public.settlements
-  for insert with check (
-    exists (select 1 from public.group_members gm where gm.group_id = settlements.group_id and gm.user_id = auth.uid())
-  );
+  for insert with check (public.is_group_member(group_id));
 
 drop policy if exists "members delete group settlements" on public.settlements;
 create policy "members delete group settlements" on public.settlements
-  for delete using (
-    exists (select 1 from public.group_members gm where gm.group_id = settlements.group_id and gm.user_id = auth.uid())
-  );
+  for delete using (public.is_group_member(group_id));
 
 -- ============================================================
 -- Realtime: let clients subscribe to live changes on these tables

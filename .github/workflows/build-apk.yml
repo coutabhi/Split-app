@@ -7,6 +7,14 @@ on:
   workflow_dispatch: {}
 
 jobs:
+  rls:
+    # The database policies are the other half of the app; a policy that
+    # cannot be evaluated breaks every screen, and no Dart test would see it.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash supabase/test/rls_test.sh
+
   build:
     runs-on: ubuntu-latest
     permissions:

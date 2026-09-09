@@ -37,6 +37,16 @@ five-minute, no-cost signup. The project URL and anon key then go in
 `lib/services/supabase_config.dart` (the anon key is meant to be
 public — the schema's RLS policies are what actually protect data).
 
+Those policies are tested. `supabase/test/rls_test.sh` builds a throwaway
+PostgreSQL from `schema.sql`, stands in for the pieces of Supabase the
+schema builds on, and checks both halves of what RLS is for: that a member
+can read and write their group, and that a non-member can do neither. It
+runs in CI on every push.
+
+If you created your database from an earlier copy of `schema.sql` and hit
+`infinite recursion detected in policy for relation "group_members"`, run
+`supabase/fix_rls_recursion.sql` once in the SQL Editor.
+
 ## Development
 
 ```bash
