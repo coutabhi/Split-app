@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 
-/// A participant in a bill split.
+/// The reserved id for the app's own user, always present in the friends
+/// directory so every balance can be expressed relative to "me".
+const String kMeId = 'me';
+
+/// A friend / contact who can be added to groups and expenses. The person
+/// with id [kMeId] represents the app's own user.
 class Person {
   Person({required this.id, required this.name, required this.colorValue});
 

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
-import 'screens/home_screen.dart';
-import 'services/bill_store.dart';
+import 'screens/root_shell.dart';
+import 'services/data_store.dart';
 import 'services/settings_store.dart';
+import 'state/app_scope.dart';
+import 'state/app_store.dart';
 import 'theme/app_theme.dart';
 import 'widgets/currency_scope.dart';
 
@@ -18,13 +20,14 @@ class OfficeSplitApp extends StatefulWidget {
 }
 
 class _OfficeSplitAppState extends State<OfficeSplitApp> {
-  final _billStore = BillStore();
   final _settingsStore = SettingsStore();
+  final _appStore = AppStore(DataStore());
   String _currency = '₹';
 
   @override
   void initState() {
     super.initState();
+    _appStore.load();
     _settingsStore.loadCurrency().then((c) {
       if (mounted) setState(() => _currency = c);
     });
@@ -40,13 +43,24 @@ class _OfficeSplitAppState extends State<OfficeSplitApp> {
     return CurrencyScope(
       symbol: _currency,
       setSymbol: _setCurrency,
-      child: MaterialApp(
-        title: 'OfficeSplit',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.light(),
-        darkTheme: AppTheme.dark(),
-        themeMode: ThemeMode.system,
-        home: HomeScreen(store: _billStore),
+      child: AppScope(
+        store: _appStore,
+        child: MaterialApp(
+          title: 'OfficeSplit',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.light(),
+          darkTheme: AppTheme.dark(),
+          themeMode: ThemeMode.system,
+          home: ListenableBuilder(
+            listenable: _appStore,
+            builder: (context, _) {
+              if (!_appStore.loaded) {
+                return const Scaffold(body: Center(child: CircularProgressIndicator()));
+              }
+              return const RootShell();
+            },
+          ),
+        ),
       ),
     );
   }

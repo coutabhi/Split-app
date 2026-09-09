@@ -1,19 +1,32 @@
 # OfficeSplit
 
-Split a shared bill (office lunch, snacks, anything) by what each person
-actually ordered — not an equal split.
+A Splitwise-style expense splitter: persistent **groups** and **friends**
+with a running balance across every expense over time — not a one-off
+bill split.
 
 ## How it works
 
-1. **People** — add everyone who was there and mark who paid the bill.
-2. **Items** — add each ordered item with its price and tap who it belongs
-   to (an item can be assigned to more than one person, split evenly
-   between them).
-3. **Charges** — add tax %, tip %, or any other flat charges (delivery,
-   packaging). These are spread across everyone in proportion to what they
-   ordered.
-4. **Summary** — see exactly who owes the payer, save the split to history,
-   or share a formatted breakdown via WhatsApp/SMS/email.
+- **Groups** — start a group (e.g. "Office"), add people, and log expenses
+  against it. The group screen shows who owes you and who you owe, updated
+  live as expenses and payments are added.
+- **Friends** — every friend has a running balance aggregated across every
+  group and direct expense you share with them.
+- **Add an expense** — description, amount, category, who paid, and how to
+  split it:
+  - **Equal** — split evenly among selected people
+  - **Unequal** — type an exact amount per person
+  - **%** — type a percentage per person
+  - **Items** — itemize what was ordered and assign each item to whoever
+    ordered it (shared items split evenly between assignees)
+- **Settle up** — records a payment between two people; in a group, it
+  suggests the fewest possible payments needed to zero out every balance
+  (the classic debt-simplification algorithm).
+- **Activity** — a chronological feed of every expense and payment across
+  all your groups and friends.
+
+Everything is stored on-device only — there's no account or sync, so
+balances are per-install (matching how the earlier per-bill splitter
+worked, just persistent across many expenses instead of one bill).
 
 ## Development
 
