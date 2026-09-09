@@ -9,7 +9,16 @@ class AppScope extends InheritedNotifier<AppStore> {
 
   static AppStore of(BuildContext context) {
     final scope = context.dependOnInheritedWidgetOfExactType<AppScope>();
-    assert(scope != null, 'AppScope not found in context');
-    return scope!.notifier!;
+    final store = scope?.notifier;
+    if (store == null) {
+      // An assert alone would be stripped from release builds, turning this
+      // into an opaque "Null check operator used on a null value" crash.
+      throw FlutterError(
+        'No AppScope found above this widget.\n'
+        'AppScope must wrap MaterialApp so that routes pushed onto its '
+        'Navigator can still reach the store.',
+      );
+    }
+    return store;
   }
 }

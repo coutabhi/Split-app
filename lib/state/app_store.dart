@@ -29,7 +29,15 @@ class AppStore extends ChangeNotifier {
 
   final SupabaseClient _client;
 
-  String get meId => _client.auth.currentUser!.id;
+  String get meId {
+    final id = _client.auth.currentUser?.id;
+    if (id == null) {
+      // A bare `!` here would surface as an opaque "Null check operator used
+      // on a null value" instead of saying what actually went wrong.
+      throw StateError('No signed-in user: the sign-in screen should be showing instead.');
+    }
+    return id;
+  }
 
   List<Person> people = [];
   List<Group> groups = [];

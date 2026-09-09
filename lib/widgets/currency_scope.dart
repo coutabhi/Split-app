@@ -15,8 +15,16 @@ class CurrencyScope extends InheritedWidget {
 
   static CurrencyScope of(BuildContext context) {
     final scope = context.dependOnInheritedWidgetOfExactType<CurrencyScope>();
-    assert(scope != null, 'CurrencyScope not found in context');
-    return scope!;
+    if (scope == null) {
+      // An assert alone would be stripped from release builds, turning this
+      // into an opaque "Null check operator used on a null value" crash.
+      throw FlutterError(
+        'No CurrencyScope found above this widget.\n'
+        'CurrencyScope must wrap MaterialApp so that routes pushed onto its '
+        'Navigator can still reach it.',
+      );
+    }
+    return scope;
   }
 
   String format(num amount) => '$symbol${amount.toStringAsFixed(2)}';
