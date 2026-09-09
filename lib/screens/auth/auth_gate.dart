@@ -57,6 +57,28 @@ class _AuthGateState extends State<AuthGate> {
         listenable: _store,
         builder: (context, _) {
           if (!_store.loaded) {
+            if (_store.loadError != null) {
+              return Scaffold(
+                body: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.cloud_off_outlined, size: 48),
+                        const SizedBox(height: 12),
+                        Text(_store.loadError!, textAlign: TextAlign.center),
+                        const SizedBox(height: 20),
+                        FilledButton(
+                          onPressed: _store.startListening,
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }
             return const Scaffold(body: Center(child: CircularProgressIndicator()));
           }
           return const RootShell();

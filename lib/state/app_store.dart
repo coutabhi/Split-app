@@ -37,38 +37,52 @@ class AppStore extends ChangeNotifier {
   List<Map<String, dynamic>> _memberRows = [];
   final Set<String> _readyStreams = {};
 
+  /// Set if the initial load timed out before every stream connected, so
+  /// the UI can show a retry option instead of spinning forever.
+  String? loadError;
+
   StreamSubscription? _profilesSub;
   StreamSubscription? _groupsSub;
   StreamSubscription? _membersSub;
   StreamSubscription? _expensesSub;
   StreamSubscription? _settlementsSub;
+  Timer? _loadTimeoutTimer;
 
   void startListening() {
     loaded = false;
+    loadError = null;
     _readyStreams.clear();
+
+    _loadTimeoutTimer?.cancel();
+    _loadTimeoutTimer = Timer(const Duration(seconds: 20), () {
+      if (!loaded) {
+        loadError = "Couldn't reach the server. Check your connection and try again.";
+        notifyListeners();
+      }
+    });
 
     _profilesSub = _client.from('profiles').stream(primaryKey: ['id']).listen((rows) {
       people = rows.map(Person.fromRow).toList();
       _markReady('profiles');
-    });
+    }, onError: (_) => _markReady('profiles'));
     _groupsSub = _client.from('groups').stream(primaryKey: ['id']).listen((rows) {
       _groupRows = rows;
       _rebuildGroups();
       _markReady('groups');
-    });
+    }, onError: (_) => _markReady('groups'));
     _membersSub = _client.from('group_members').stream(primaryKey: ['group_id', 'user_id']).listen((rows) {
       _memberRows = rows;
       _rebuildGroups();
       _markReady('group_members');
-    });
+    }, onError: (_) => _markReady('group_members'));
     _expensesSub = _client.from('expenses').stream(primaryKey: ['id']).listen((rows) {
       expenses = rows.map(Expense.fromRow).toList();
       _markReady('expenses');
-    });
+    }, onError: (_) => _markReady('expenses'));
     _settlementsSub = _client.from('settlements').stream(primaryKey: ['id']).listen((rows) {
       settlements = rows.map(Settlement.fromRow).toList();
       _markReady('settlements');
-    });
+    }, onError: (_) => _markReady('settlements'));
   }
 
   void _rebuildGroups() {
@@ -85,11 +99,14 @@ class AppStore extends ChangeNotifier {
     _readyStreams.add(stream);
     if (!loaded && _readyStreams.length == 5) {
       loaded = true;
+      loadError = null;
+      _loadTimeoutTimer?.cancel();
     }
     notifyListeners();
   }
 
   Future<void> stopListening() async {
+    _loadTimeoutTimer?.cancel();
     await _profilesSub?.cancel();
     await _groupsSub?.cancel();
     await _membersSub?.cancel();

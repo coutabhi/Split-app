@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -36,8 +38,12 @@ class _SignInScreenState extends State<SignInScreen> {
       _error = null;
     });
     try {
-      await Supabase.instance.client.auth.signInWithPassword(email: email, password: password);
+      await Supabase.instance.client.auth
+          .signInWithPassword(email: email, password: password)
+          .timeout(const Duration(seconds: 15));
       // AuthGate reacts to the session change automatically.
+    } on TimeoutException {
+      setState(() => _error = 'Timed out reaching the server. Check your connection and try again.');
     } on AuthException catch (e) {
       setState(() => _error = e.message);
     } catch (e) {

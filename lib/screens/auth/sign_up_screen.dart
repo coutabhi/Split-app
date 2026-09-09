@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -45,16 +47,16 @@ class _SignUpScreenState extends State<SignUpScreen> {
       _info = null;
     });
     try {
-      final response = await Supabase.instance.client.auth.signUp(
-        email: email,
-        password: password,
-        data: {'name': name},
-      );
+      final response = await Supabase.instance.client.auth
+          .signUp(email: email, password: password, data: {'name': name})
+          .timeout(const Duration(seconds: 15));
       if (response.session == null && mounted) {
         // Email confirmation is required before a session is issued.
         setState(() => _info = 'Account created — check $email for a confirmation link, then sign in.');
       }
       // If a session came back immediately, AuthGate picks it up on its own.
+    } on TimeoutException {
+      setState(() => _error = 'Timed out reaching the server. Check your connection and try again.');
     } on AuthException catch (e) {
       setState(() => _error = e.message);
     } catch (e) {
