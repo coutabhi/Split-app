@@ -3,12 +3,15 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 
 import '../models/expense.dart';
 import '../models/group.dart';
 import '../models/person.dart';
 import '../models/settlement.dart';
 import '../utils/error_text.dart';
+
+const _uuid = Uuid();
 
 class SettleSuggestion {
   SettleSuggestion({required this.fromId, required this.toId, required this.amount});
@@ -149,20 +152,31 @@ class AppStore extends ChangeNotifier {
   }
 
   Future<Group> createGroup(String name) async {
+    // The id is generated client-side (rather than reading it back with
+    // .select() after insert) because the "view groups you're a member of"
+    // RLS policy can't see this row until the group_members insert just
+    // below completes - a read-back in between would see zero rows.
     for (var attempt = 0; attempt < 6; attempt++) {
+      final id = _uuid.v4();
+      final colorValue = kGroupPalette[groups.length % kGroupPalette.length];
+      final inviteCode = _randomInviteCode();
       try {
-        final row = await _client
-            .from('groups')
-            .insert({
-              'name': name.trim(),
-              'color_value': kGroupPalette[groups.length % kGroupPalette.length],
-              'invite_code': _randomInviteCode(),
-              'created_by': meId,
-            })
-            .select()
-            .single();
-        await _client.from('group_members').insert({'group_id': row['id'], 'user_id': meId});
-        return Group.fromRow(row, [meId]);
+        await _client.from('groups').insert({
+          'id': id,
+          'name': name.trim(),
+          'color_value': colorValue,
+          'invite_code': inviteCode,
+          'created_by': meId,
+        });
+        await _client.from('group_members').insert({'group_id': id, 'user_id': meId});
+        return Group(
+          id: id,
+          name: name.trim(),
+          colorValue: colorValue,
+          inviteCode: inviteCode,
+          createdBy: meId,
+          memberIds: [meId],
+        );
       } on PostgrestException catch (e) {
         if (e.code == '23505' && attempt < 5) continue;
         rethrow;
