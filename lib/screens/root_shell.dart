@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../state/app_scope.dart';
 import 'account/account_tab.dart';
 import 'activity/activity_tab.dart';
 import 'friends/friends_tab.dart';
@@ -12,7 +13,7 @@ class RootShell extends StatefulWidget {
   State<RootShell> createState() => _RootShellState();
 }
 
-class _RootShellState extends State<RootShell> {
+class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
   int _index = 0;
 
   static const _tabs = [
@@ -21,6 +22,27 @@ class _RootShellState extends State<RootShell> {
     ActivityTab(),
     AccountTab(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Coming back to the app is the moment a teammate's changes are most
+    // likely to be stale, so pull them in rather than trusting realtime.
+    if (state == AppLifecycleState.resumed) {
+      AppScope.of(context).refresh().ignore();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

@@ -29,11 +29,19 @@ class AppStore extends ChangeNotifier {
 
   final SupabaseClient _client;
 
-  String get meId {
+  /// The signed-in user's id, or empty while signed out.
+  ///
+  /// Lenient on purpose: signing out notifies listeners before the gate
+  /// swaps in the sign-in screen, so widgets can briefly rebuild with no
+  /// user. Matching nothing there renders a harmless empty frame, whereas
+  /// throwing would red-screen the app on the way out.
+  String get meId => _client.auth.currentUser?.id ?? '';
+
+  /// Writes must have a real user, so they fail loudly instead of silently
+  /// attributing rows to nobody.
+  String get _requireMeId {
     final id = _client.auth.currentUser?.id;
     if (id == null) {
-      // A bare `!` here would surface as an opaque "Null check operator used
-      // on a null value" instead of saying what actually went wrong.
       throw StateError('No signed-in user: the sign-in screen should be showing instead.');
     }
     return id;
@@ -97,6 +105,32 @@ class AppStore extends ChangeNotifier {
     }, onError: (e) => _markReady('settlements', error: e));
   }
 
+  /// Re-reads every table directly.
+  ///
+  /// Realtime only delivers rows that were already visible to you when the
+  /// change happened, and never replays a row that becomes visible later.
+  /// Creating a group inserts the group *before* the membership that grants
+  /// visibility, and joining by invite code doesn't change the group row at
+  /// all - so neither ever arrives as an event. Every write therefore ends
+  /// with an explicit re-read, which also keeps the app correct if realtime
+  /// is unavailable.
+  Future<void> refresh() async {
+    final results = await Future.wait([
+      _client.from('profiles').select(),
+      _client.from('groups').select(),
+      _client.from('group_members').select(),
+      _client.from('expenses').select(),
+      _client.from('settlements').select(),
+    ]);
+    people = (results[0]).map(Person.fromRow).toList();
+    _groupRows = List<Map<String, dynamic>>.from(results[1]);
+    _memberRows = List<Map<String, dynamic>>.from(results[2]);
+    expenses = (results[3]).map(Expense.fromRow).toList();
+    settlements = (results[4]).map(Settlement.fromRow).toList();
+    _rebuildGroups();
+    notifyListeners();
+  }
+
   void _rebuildGroups() {
     groups = _groupRows.map((row) {
       final memberIds = _memberRows
@@ -148,7 +182,8 @@ class AppStore extends ChangeNotifier {
   // --- Profile ---------------------------------------------------------
 
   Future<void> renameMe(String name) async {
-    await _client.from('profiles').update({'name': name.trim()}).eq('id', meId);
+    await _client.from('profiles').update({'name': name.trim()}).eq('id', _requireMeId);
+    await refresh();
   }
 
   // --- Groups -------------------------------------------------------
@@ -174,16 +209,19 @@ class AppStore extends ChangeNotifier {
           'name': name.trim(),
           'color_value': colorValue,
           'invite_code': inviteCode,
-          'created_by': meId,
+          'created_by': _requireMeId,
         });
-        await _client.from('group_members').insert({'group_id': id, 'user_id': meId});
+        await _client.from('group_members').insert({'group_id': id, 'user_id': _requireMeId});
+        // Realtime never delivers this group (see refresh()), so pull it in
+        // before the caller navigates to it.
+        await refresh();
         return Group(
           id: id,
           name: name.trim(),
           colorValue: colorValue,
           inviteCode: inviteCode,
-          createdBy: meId,
-          memberIds: [meId],
+          createdBy: _requireMeId,
+          memberIds: [_requireMeId],
         );
       } on PostgrestException catch (e) {
         if (e.code == '23505' && attempt < 5) continue;
@@ -193,9 +231,9 @@ class AppStore extends ChangeNotifier {
     throw Exception('Could not create the group. Try again.');
   }
 
-  /// Throws with a friendly message on an invalid code.
   Future<void> joinGroupByCode(String code) async {
     await _client.rpc('join_group_by_code', params: {'p_code': code.trim()});
+    await refresh();
   }
 
   Future<void> renameGroup(String groupId, String name) async {
@@ -203,7 +241,8 @@ class AppStore extends ChangeNotifier {
   }
 
   Future<void> leaveGroup(String groupId) async {
-    await _client.from('group_members').delete().eq('group_id', groupId).eq('user_id', meId);
+    await _client.from('group_members').delete().eq('group_id', groupId).eq('user_id', _requireMeId);
+    await refresh();
   }
 
   // --- Expenses -----------------------------------------------------
@@ -231,15 +270,18 @@ class AppStore extends ChangeNotifier {
       category: category,
       items: items?.cast() ?? [],
     );
-    await _client.from('expenses').insert({...expense.toRow(), 'created_by': meId});
+    await _client.from('expenses').insert({...expense.toRow(), 'created_by': _requireMeId});
+    await refresh();
   }
 
   Future<void> updateExpense(Expense expense) async {
     await _client.from('expenses').update(expense.toRow()).eq('id', expense.id);
+    await refresh();
   }
 
   Future<void> deleteExpense(String id) async {
     await _client.from('expenses').delete().eq('id', id);
+    await refresh();
   }
 
   // --- Settlements ----------------------------------------------------
@@ -252,7 +294,8 @@ class AppStore extends ChangeNotifier {
     String note = '',
   }) async {
     final settlement = Settlement(id: '', groupId: groupId, fromId: fromId, toId: toId, amount: amount, note: note);
-    await _client.from('settlements').insert({...settlement.toRow(), 'created_by': meId});
+    await _client.from('settlements').insert({...settlement.toRow(), 'created_by': _requireMeId});
+    await refresh();
   }
 
   // --- Balances -------------------------------------------------------

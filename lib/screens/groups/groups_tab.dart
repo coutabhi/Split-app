@@ -28,10 +28,21 @@ class GroupsTab extends StatelessWidget {
           ),
         ],
       ),
-      body: store.groups.isEmpty
-          ? _EmptyGroups(onCreate: () => _createGroup(context), onJoin: () => _joinGroup(context))
+      body: RefreshIndicator(
+        onRefresh: store.refresh,
+        child: store.groups.isEmpty
+          ? ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              children: [
+                SizedBox(
+                  height: MediaQuery.of(context).size.height * 0.7,
+                  child: _EmptyGroups(onCreate: () => _createGroup(context), onJoin: () => _joinGroup(context)),
+                ),
+              ],
+            )
           : ListView(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
+              physics: const AlwaysScrollableScrollPhysics(),
               children: [
                 if (overall.abs() > 0.005)
                   Padding(
@@ -86,6 +97,7 @@ class GroupsTab extends StatelessWidget {
                   ),
               ],
             ),
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _createGroup(context),
         icon: const Icon(Icons.add),
