@@ -5,12 +5,12 @@ enum SplitType { equal, exact, percent, items }
 enum ExpenseCategory { general, food, transport, entertainment, home, utilities, shopping, travel }
 
 /// One logged expense: who paid, the total, and how it's split between the
-/// participants. Belongs to a [groupId], or is a direct expense between
-/// friends when null.
+/// participants. Always belongs to a group, backed by Supabase's
+/// `expenses` table.
 class Expense {
   Expense({
     required this.id,
-    this.groupId,
+    required this.groupId,
     required this.description,
     required this.amount,
     required this.paidById,
@@ -28,7 +28,7 @@ class Expense {
         createdAt = createdAt ?? DateTime.now();
 
   final String id;
-  String? groupId;
+  String groupId;
   String description;
   double amount;
   String paidById;
@@ -45,43 +45,40 @@ class Expense {
 
   double shareOf(String personId) => shares[personId] ?? 0;
 
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'groupId': groupId,
+  Map<String, dynamic> toRow() => {
+        'group_id': groupId,
         'description': description,
         'amount': amount,
-        'paidById': paidById,
-        'splitType': splitType.name,
+        'paid_by': paidById,
+        'split_type': splitType.name,
         'shares': shares,
-        'participantIds': participantIds,
+        'participant_ids': participantIds,
         'category': category.name,
         'items': items.map((i) => i.toJson()).toList(),
-        'date': date.toIso8601String(),
-        'createdAt': createdAt.toIso8601String(),
       };
 
-  factory Expense.fromJson(Map<String, dynamic> json) => Expense(
-        id: json['id'] as String,
-        groupId: json['groupId'] as String?,
-        description: json['description'] as String,
-        amount: (json['amount'] as num).toDouble(),
-        paidById: json['paidById'] as String,
+  factory Expense.fromRow(Map<String, dynamic> row) => Expense(
+        id: row['id'] as String,
+        groupId: row['group_id'] as String,
+        description: row['description'] as String,
+        amount: (row['amount'] as num).toDouble(),
+        paidById: row['paid_by'] as String,
         splitType: SplitType.values.firstWhere(
-          (t) => t.name == json['splitType'],
+          (t) => t.name == row['split_type'],
           orElse: () => SplitType.equal,
         ),
-        shares: (json['shares'] as Map<String, dynamic>).map(
+        shares: (row['shares'] as Map<String, dynamic>).map(
           (k, v) => MapEntry(k, (v as num).toDouble()),
         ),
-        participantIds: (json['participantIds'] as List).cast<String>(),
+        participantIds: (row['participant_ids'] as List).cast<String>(),
         category: ExpenseCategory.values.firstWhere(
-          (c) => c.name == json['category'],
+          (c) => c.name == row['category'],
           orElse: () => ExpenseCategory.general,
         ),
-        items: (json['items'] as List? ?? [])
+        items: (row['items'] as List? ?? [])
             .map((i) => BillItem.fromJson(i as Map<String, dynamic>))
             .toList(),
-        date: DateTime.tryParse(json['date'] as String? ?? '') ?? DateTime.now(),
-        createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.now(),
+        date: DateTime.tryParse(row['date'] as String? ?? '') ?? DateTime.now(),
+        createdAt: DateTime.tryParse(row['created_at'] as String? ?? '') ?? DateTime.now(),
       );
 }

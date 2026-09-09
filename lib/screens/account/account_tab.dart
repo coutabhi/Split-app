@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../models/person.dart';
 import '../../state/app_scope.dart';
@@ -8,9 +9,9 @@ import '../../widgets/person_avatar.dart';
 class AccountTab extends StatelessWidget {
   const AccountTab({super.key});
 
-  Future<void> _renameMe(BuildContext context) async {
+  Future<void> _renameMe(BuildContext context, Person me) async {
     final store = AppScope.of(context);
-    final controller = TextEditingController(text: store.me.name);
+    final controller = TextEditingController(text: me.name);
     final name = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
@@ -22,8 +23,8 @@ class AccountTab extends StatelessWidget {
         ],
       ),
     );
-    if (name != null && name.trim().isNotEmpty && context.mounted) {
-      store.renamePerson(kMeId, name);
+    if (name != null && name.trim().isNotEmpty) {
+      await store.renameMe(name);
     }
   }
 
@@ -53,27 +54,46 @@ class AccountTab extends StatelessWidget {
     );
   }
 
+  Future<void> _signOut(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Sign out?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Sign out')),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await Supabase.instance.client.auth.signOut();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final store = AppScope.of(context);
     final scheme = Theme.of(context).colorScheme;
     final currencyScope = CurrencyScope.of(context);
+    final me = store.personById(store.meId);
+    final email = Supabase.instance.client.auth.currentUser?.email ?? '';
 
     return Scaffold(
       appBar: AppBar(title: const Text('Account')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
         children: [
-          Card(
-            child: ListTile(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              leading: PersonAvatar(person: store.me, radius: 22),
-              title: Text(store.me.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-              subtitle: const Text('This is you'),
-              trailing: const Icon(Icons.edit_outlined),
-              onTap: () => _renameMe(context),
+          if (me != null)
+            Card(
+              child: ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                leading: PersonAvatar(person: me, radius: 22),
+                title: Text(me.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                subtitle: Text(email, maxLines: 1, overflow: TextOverflow.ellipsis),
+                trailing: const Icon(Icons.edit_outlined),
+                onTap: () => _renameMe(context, me),
+              ),
             ),
-          ),
           const SizedBox(height: 12),
           Card(
             child: ListTile(
@@ -85,10 +105,17 @@ class AccountTab extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 24),
+          OutlinedButton.icon(
+            onPressed: () => _signOut(context),
+            style: OutlinedButton.styleFrom(foregroundColor: scheme.error, side: BorderSide(color: scheme.error)),
+            icon: const Icon(Icons.logout),
+            label: const Text('Sign out'),
+          ),
+          const SizedBox(height: 24),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: Text(
-              'OfficeSplit keeps everything on this device only — nothing is synced to the cloud, so balances are only visible here.',
+              'Groups and expenses sync live with your team through OfficeSplit\'s shared backend.',
               style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13),
             ),
           ),

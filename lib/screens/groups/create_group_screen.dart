@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../state/app_scope.dart';
-import '../../widgets/person_avatar.dart';
 import 'group_detail_screen.dart';
 
 class CreateGroupScreen extends StatefulWidget {
@@ -13,44 +12,42 @@ class CreateGroupScreen extends StatefulWidget {
 
 class _CreateGroupScreenState extends State<CreateGroupScreen> {
   final _nameController = TextEditingController();
-  final _friendController = TextEditingController();
-  final Set<String> _selected = {};
+  bool _loading = false;
   String? _error;
 
   @override
   void dispose() {
     _nameController.dispose();
-    _friendController.dispose();
     super.dispose();
   }
 
-  void _addFriend(BuildContext context) {
-    final name = _friendController.text.trim();
-    if (name.isEmpty) return;
-    final store = AppScope.of(context);
-    final person = store.addFriend(name);
-    _friendController.clear();
-    setState(() => _selected.add(person.id));
-  }
-
-  void _create(BuildContext context) {
+  Future<void> _create() async {
     final name = _nameController.text.trim();
     if (name.isEmpty) {
       setState(() => _error = 'Give the group a name');
       return;
     }
-    final store = AppScope.of(context);
-    final group = store.addGroup(name, _selected.toList());
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => GroupDetailScreen(groupId: group.id)),
-    );
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final group = await AppScope.of(context).createGroup(name);
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => GroupDetailScreen(groupId: group.id)),
+        );
+      }
+    } catch (e) {
+      setState(() => _error = 'Could not create the group. Check your connection and try again.');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final store = AppScope.of(context);
     final scheme = Theme.of(context).colorScheme;
-    final friends = store.friends;
 
     return Scaffold(
       appBar: AppBar(title: const Text('New group')),
@@ -62,54 +59,15 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
             textCapitalization: TextCapitalization.words,
             decoration: const InputDecoration(labelText: 'Group name', hintText: 'e.g. Office'),
             autofocus: true,
+            onSubmitted: (_) => _create(),
           ),
-          const SizedBox(height: 24),
-          Text('Add people', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _friendController,
-                  textCapitalization: TextCapitalization.words,
-                  decoration: const InputDecoration(hintText: 'Friend\'s name'),
-                  onSubmitted: (_) => _addFriend(context),
-                ),
-              ),
-              const SizedBox(width: 10),
-              FilledButton(
-                onPressed: () => _addFriend(context),
-                style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18)),
-                child: const Icon(Icons.add),
-              ),
-            ],
+          const SizedBox(height: 12),
+          Text(
+            'You\'ll get an invite code to share with colleagues right after — they join with it and see the group\'s balances live.',
+            style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13),
           ),
-          const SizedBox(height: 16),
-          if (friends.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 20),
-              child: Text('No friends yet — add one above.', style: TextStyle(color: scheme.onSurfaceVariant)),
-            )
-          else
-            ...friends.map((p) {
-              final selected = _selected.contains(p.id);
-              return CheckboxListTile(
-                value: selected,
-                onChanged: (v) => setState(() {
-                  if (v == true) {
-                    _selected.add(p.id);
-                  } else {
-                    _selected.remove(p.id);
-                  }
-                }),
-                controlAffinity: ListTileControlAffinity.trailing,
-                secondary: PersonAvatar(person: p),
-                title: Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-              );
-            }),
           if (_error != null) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 16),
             Text(_error!, style: TextStyle(color: scheme.error)),
           ],
         ],
@@ -119,7 +77,12 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
           padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
           child: SizedBox(
             width: double.infinity,
-            child: FilledButton(onPressed: () => _create(context), child: const Text('Create group')),
+            child: FilledButton(
+              onPressed: _loading ? null : _create,
+              child: _loading
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Create group'),
+            ),
           ),
         ),
       ),

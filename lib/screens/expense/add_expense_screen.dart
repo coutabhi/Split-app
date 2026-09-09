@@ -12,14 +12,11 @@ import '../steps/item_editor_sheet.dart';
 
 const _uuid = Uuid();
 
-/// Add or edit an expense. When [groupId] is set, participants come from
-/// that group; when [friendId] is set instead, it's a direct 1:1 expense
-/// with that friend. Pass [existing] to edit.
+/// Add or edit an expense in [groupId]. Pass [existing] to edit.
 class AddExpenseScreen extends StatefulWidget {
-  const AddExpenseScreen({super.key, this.groupId, this.friendId, this.existing});
+  const AddExpenseScreen({super.key, required this.groupId, this.existing});
 
-  final String? groupId;
-  final String? friendId;
+  final String groupId;
   final Expense? existing;
 
   @override
@@ -33,29 +30,17 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   );
 
   late SplitType _splitType = widget.existing?.splitType ?? SplitType.equal;
-  late String _paidById = widget.existing?.paidById ?? kMeId;
+  late String _paidById = widget.existing?.paidById ?? AppScope.of(context).meId;
   late ExpenseCategory _category = widget.existing?.category ?? ExpenseCategory.general;
-  late final Set<String> _participants = {...(widget.existing?.participantIds ?? _defaultPool())};
+  late final Set<String> _participants = {...(widget.existing?.participantIds ?? _pool)};
   late final List<BillItem> _items = [...(widget.existing?.items ?? [])];
 
   final Map<String, TextEditingController> _exactControllers = {};
   final Map<String, TextEditingController> _percentControllers = {};
   String? _error;
+  bool _saving = false;
 
-  List<String> _defaultPool() {
-    final store = AppScope.of(context);
-    if (widget.groupId != null) return store.groupById(widget.groupId!)?.memberIds ?? [kMeId];
-    if (widget.friendId != null) return [kMeId, widget.friendId!];
-    return [kMeId];
-  }
-
-  List<String> get _pool {
-    final store = AppScope.of(context);
-    if (widget.groupId != null) return store.groupById(widget.groupId!)?.memberIds ?? [kMeId];
-    if (widget.friendId != null) return [kMeId, widget.friendId!];
-    if (widget.existing != null) return {kMeId, ...widget.existing!.participantIds}.toList();
-    return [kMeId];
-  }
+  List<String> get _pool => AppScope.of(context).groupById(widget.groupId)?.memberIds ?? [];
 
   static String _trimZeros(double v) => v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(2);
 
@@ -163,7 +148,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     });
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     final desc = _descController.text.trim();
     if (desc.isEmpty) {
       setState(() => _error = 'Give the expense a description');
@@ -203,32 +188,45 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       }
     }
 
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
     final store = AppScope.of(context);
-    if (widget.existing != null) {
-      widget.existing!
-        ..description = desc
-        ..amount = amount
-        ..paidById = _paidById
-        ..splitType = _splitType
-        ..shares = shares
-        ..participantIds = participantIds
-        ..category = _category
-        ..items = _items;
-      store.updateExpense(widget.existing!);
-    } else {
-      store.addExpense(
-        groupId: widget.groupId,
-        description: desc,
-        amount: amount,
-        paidById: _paidById,
-        splitType: _splitType,
-        shares: shares,
-        participantIds: participantIds,
-        category: _category,
-        items: _items,
-      );
+    try {
+      if (widget.existing != null) {
+        widget.existing!
+          ..description = desc
+          ..amount = amount
+          ..paidById = _paidById
+          ..splitType = _splitType
+          ..shares = shares
+          ..participantIds = participantIds
+          ..category = _category
+          ..items = _items;
+        await store.updateExpense(widget.existing!);
+      } else {
+        await store.addExpense(
+          groupId: widget.groupId,
+          description: desc,
+          amount: amount,
+          paidById: _paidById,
+          splitType: _splitType,
+          shares: shares,
+          participantIds: participantIds,
+          category: _category,
+          items: _items,
+        );
+      }
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+          _error = 'Could not save. Check your connection and try again.';
+        });
+      }
     }
-    Navigator.of(context).pop(true);
   }
 
   @override
@@ -286,7 +284,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                   children: [
                     PersonAvatar(person: p, radius: 12),
                     const SizedBox(width: 8),
-                    Text(p.id == kMeId ? 'You' : p.name),
+                    Text(p.id == store.meId ? 'You' : p.name),
                   ],
                 ),
               );
@@ -321,6 +319,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
             _ParticipantsEditor(
               splitType: _splitType,
               pool: pool,
+              meId: store.meId,
               participants: _participants,
               amount: _amount,
               onToggle: (id) => setState(() {
@@ -345,7 +344,12 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
           padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
           child: SizedBox(
             width: double.infinity,
-            child: FilledButton(onPressed: _submit, child: const Text('Save')),
+            child: FilledButton(
+              onPressed: _saving ? null : _submit,
+              child: _saving
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Save'),
+            ),
           ),
         ),
       ),
@@ -430,6 +434,7 @@ class _ParticipantsEditor extends StatelessWidget {
   const _ParticipantsEditor({
     required this.splitType,
     required this.pool,
+    required this.meId,
     required this.participants,
     required this.amount,
     required this.onToggle,
@@ -440,6 +445,7 @@ class _ParticipantsEditor extends StatelessWidget {
 
   final SplitType splitType;
   final List<Person> pool;
+  final String meId;
   final Set<String> participants;
   final double amount;
   final ValueChanged<String> onToggle;
@@ -471,7 +477,7 @@ class _ParticipantsEditor extends StatelessWidget {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    p.id == kMeId ? 'You' : p.name,
+                    p.id == meId ? 'You' : p.name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),

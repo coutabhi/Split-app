@@ -1,38 +1,34 @@
-import 'person.dart';
-
-/// A persistent group of people (e.g. "Office") that expenses get logged
-/// against. Balances accumulate across every expense in the group over
-/// time, unlike a one-off split.
+/// A shared group backed by Supabase's `groups` + `group_members` tables.
+/// Colleagues join via [inviteCode]; balances accumulate across every
+/// expense logged against the group over time.
 class Group {
   Group({
     required this.id,
     required this.name,
     required this.colorValue,
+    required this.inviteCode,
+    required this.createdBy,
     List<String>? memberIds,
     DateTime? createdAt,
-  })  : memberIds = memberIds ?? [kMeId],
+  })  : memberIds = memberIds ?? [],
         createdAt = createdAt ?? DateTime.now();
 
   final String id;
   String name;
   int colorValue;
+  final String inviteCode;
+  final String createdBy;
   List<String> memberIds;
   final DateTime createdAt;
 
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'colorValue': colorValue,
-        'memberIds': memberIds,
-        'createdAt': createdAt.toIso8601String(),
-      };
-
-  factory Group.fromJson(Map<String, dynamic> json) => Group(
-        id: json['id'] as String,
-        name: json['name'] as String,
-        colorValue: json['colorValue'] as int,
-        memberIds: (json['memberIds'] as List).cast<String>(),
-        createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.now(),
+  factory Group.fromRow(Map<String, dynamic> row, List<String> memberIds) => Group(
+        id: row['id'] as String,
+        name: row['name'] as String,
+        colorValue: (row['color_value'] as num).toInt(),
+        inviteCode: row['invite_code'] as String,
+        createdBy: row['created_by'] as String,
+        memberIds: memberIds,
+        createdAt: DateTime.tryParse(row['created_at'] as String? ?? '') ?? DateTime.now(),
       );
 }
 

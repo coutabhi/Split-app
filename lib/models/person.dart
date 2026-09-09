@@ -1,11 +1,7 @@
 import 'package:flutter/material.dart';
 
-/// The reserved id for the app's own user, always present in the friends
-/// directory so every balance can be expressed relative to "me".
-const String kMeId = 'me';
-
-/// A friend / contact who can be added to groups and expenses. The person
-/// with id [kMeId] represents the app's own user.
+/// A teammate, backed by a row in Supabase's `profiles` table (one per
+/// signed-up user). [id] is that user's auth uid.
 class Person {
   Person({required this.id, required this.name, required this.colorValue});
 
@@ -24,16 +20,10 @@ class Person {
     return (parts.first[0] + parts.last[0]).toUpperCase();
   }
 
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'colorValue': colorValue,
-      };
-
-  factory Person.fromJson(Map<String, dynamic> json) => Person(
-        id: json['id'] as String,
-        name: json['name'] as String,
-        colorValue: json['colorValue'] as int,
+  factory Person.fromRow(Map<String, dynamic> row) => Person(
+        id: row['id'] as String,
+        name: row['name'] as String,
+        colorValue: (row['color_value'] as num).toInt(),
       );
 
   Person copy() => Person(id: id, name: name, colorValue: colorValue);

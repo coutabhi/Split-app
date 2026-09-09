@@ -1,13 +1,13 @@
+import 'dart:async';
+import 'dart:math';
+
 import 'package:flutter/material.dart';
-import 'package:uuid/uuid.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/expense.dart';
 import '../models/group.dart';
 import '../models/person.dart';
 import '../models/settlement.dart';
-import '../services/data_store.dart';
-
-const _uuid = Uuid();
 
 class SettleSuggestion {
   SettleSuggestion({required this.fromId, required this.toId, required this.amount});
@@ -16,15 +16,16 @@ class SettleSuggestion {
   final double amount;
 }
 
-/// Central app state: the friends directory (always including "me"),
-/// groups, expenses and settlements, plus every balance computation the UI
-/// needs. Mirrors how Splitwise itself models data - balances accumulate
-/// across every expense in a group (or between two friends) over time,
-/// rather than resetting per bill.
+/// Central app state, backed by Supabase. Every list here is kept live via
+/// realtime table streams — row-level security means each stream already
+/// only ever contains what the signed-in user is allowed to see, so no
+/// manual filtering by "my groups" is needed here.
 class AppStore extends ChangeNotifier {
-  AppStore(this._store);
+  AppStore(this._client);
 
-  final DataStore _store;
+  final SupabaseClient _client;
+
+  String get meId => _client.auth.currentUser!.id;
 
   List<Person> people = [];
   List<Group> groups = [];
@@ -32,20 +33,73 @@ class AppStore extends ChangeNotifier {
   List<Settlement> settlements = [];
   bool loaded = false;
 
-  List<Person> get friends => people.where((p) => p.id != kMeId).toList();
+  List<Map<String, dynamic>> _groupRows = [];
+  List<Map<String, dynamic>> _memberRows = [];
+  final Set<String> _readyStreams = {};
 
-  Person get me => people.firstWhere((p) => p.id == kMeId);
+  StreamSubscription? _profilesSub;
+  StreamSubscription? _groupsSub;
+  StreamSubscription? _membersSub;
+  StreamSubscription? _expensesSub;
+  StreamSubscription? _settlementsSub;
 
-  Future<void> load() async {
-    people = await _store.loadPeople();
-    if (people.every((p) => p.id != kMeId)) {
-      people.insert(0, Person(id: kMeId, name: 'You', colorValue: kPersonPalette[0]));
-      await _store.savePeople(people);
+  void startListening() {
+    loaded = false;
+    _readyStreams.clear();
+
+    _profilesSub = _client.from('profiles').stream(primaryKey: ['id']).listen((rows) {
+      people = rows.map(Person.fromRow).toList();
+      _markReady('profiles');
+    });
+    _groupsSub = _client.from('groups').stream(primaryKey: ['id']).listen((rows) {
+      _groupRows = rows;
+      _rebuildGroups();
+      _markReady('groups');
+    });
+    _membersSub = _client.from('group_members').stream(primaryKey: ['group_id', 'user_id']).listen((rows) {
+      _memberRows = rows;
+      _rebuildGroups();
+      _markReady('group_members');
+    });
+    _expensesSub = _client.from('expenses').stream(primaryKey: ['id']).listen((rows) {
+      expenses = rows.map(Expense.fromRow).toList();
+      _markReady('expenses');
+    });
+    _settlementsSub = _client.from('settlements').stream(primaryKey: ['id']).listen((rows) {
+      settlements = rows.map(Settlement.fromRow).toList();
+      _markReady('settlements');
+    });
+  }
+
+  void _rebuildGroups() {
+    groups = _groupRows.map((row) {
+      final memberIds = _memberRows
+          .where((m) => m['group_id'] == row['id'])
+          .map((m) => m['user_id'] as String)
+          .toList();
+      return Group.fromRow(row, memberIds);
+    }).toList();
+  }
+
+  void _markReady(String stream) {
+    _readyStreams.add(stream);
+    if (!loaded && _readyStreams.length == 5) {
+      loaded = true;
     }
-    groups = await _store.loadGroups();
-    expenses = await _store.loadExpenses();
-    settlements = await _store.loadSettlements();
-    loaded = true;
+    notifyListeners();
+  }
+
+  Future<void> stopListening() async {
+    await _profilesSub?.cancel();
+    await _groupsSub?.cancel();
+    await _membersSub?.cancel();
+    await _expensesSub?.cancel();
+    await _settlementsSub?.cancel();
+    people = [];
+    groups = [];
+    expenses = [];
+    settlements = [];
+    loaded = false;
     notifyListeners();
   }
 
@@ -59,114 +113,64 @@ class AppStore extends ChangeNotifier {
   List<Settlement> settlementsForGroup(String groupId) =>
       settlements.where((s) => s.groupId == groupId).toList()..sort((a, b) => b.date.compareTo(a.date));
 
-  /// Every expense and settlement involving both [kMeId] and [friendId],
-  /// in any group or none, newest first.
-  List<dynamic> historyWithFriend(String friendId) {
-    final items = <dynamic>[
-      ...expenses.where(
-        (e) => e.participantIds.contains(friendId) && e.participantIds.contains(kMeId),
-      ),
-      ...settlements.where(
-        (s) => (s.fromId == friendId && s.toId == kMeId) || (s.fromId == kMeId && s.toId == friendId),
-      ),
-    ];
-    items.sort((a, b) {
-      final da = a is Expense ? a.date : (a as Settlement).date;
-      final db = b is Expense ? b.date : (b as Settlement).date;
-      return db.compareTo(da);
-    });
-    return items;
-  }
+  // --- Profile ---------------------------------------------------------
 
-  // --- Friends ----------------------------------------------------------
-
-  Person addFriend(String name) {
-    final usedColors = people.map((p) => p.colorValue).toSet();
-    final color = kPersonPalette.firstWhere(
-      (c) => !usedColors.contains(c),
-      orElse: () => kPersonPalette[people.length % kPersonPalette.length],
-    );
-    final person = Person(id: _uuid.v4(), name: name.trim(), colorValue: color);
-    people.add(person);
-    _store.savePeople(people);
-    notifyListeners();
-    return person;
-  }
-
-  void renamePerson(String id, String name) {
-    final p = personById(id);
-    if (p == null) return;
-    p.name = name.trim();
-    _store.savePeople(people);
-    notifyListeners();
-  }
-
-  /// Returns null on success, or an error message if the friend can't be
-  /// removed (still has a non-zero balance, matching Splitwise's rule).
-  String? removeFriend(String id) {
-    if (friendBalance(id).abs() > 0.005) {
-      return "You can't remove a friend you still owe or who owes you.";
-    }
-    people.removeWhere((p) => p.id == id);
-    for (final g in groups) {
-      g.memberIds.remove(id);
-    }
-    _store.savePeople(people);
-    _store.saveGroups(groups);
-    notifyListeners();
-    return null;
+  Future<void> renameMe(String name) async {
+    await _client.from('profiles').update({'name': name.trim()}).eq('id', meId);
   }
 
   // --- Groups -------------------------------------------------------
 
-  Group addGroup(String name, List<String> memberIds, {int? colorValue}) {
-    final ids = {kMeId, ...memberIds}.toList();
-    final group = Group(
-      id: _uuid.v4(),
-      name: name.trim(),
-      colorValue: colorValue ?? kGroupPalette[groups.length % kGroupPalette.length],
-      memberIds: ids,
-    );
-    groups.add(group);
-    _store.saveGroups(groups);
-    notifyListeners();
-    return group;
+  String _randomInviteCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    final rand = Random.secure();
+    return List.generate(6, (_) => chars[rand.nextInt(chars.length)]).join();
   }
 
-  void updateGroupMembers(String groupId, List<String> memberIds) {
-    final g = groupById(groupId);
-    if (g == null) return;
-    g.memberIds = {kMeId, ...memberIds}.toList();
-    _store.saveGroups(groups);
-    notifyListeners();
-  }
-
-  void renameGroup(String groupId, String name) {
-    final g = groupById(groupId);
-    if (g == null) return;
-    g.name = name.trim();
-    _store.saveGroups(groups);
-    notifyListeners();
-  }
-
-  String? deleteGroup(String groupId) {
-    if (groupNetForMe(groupId).abs() > 0.005) {
-      return "Settle up in this group before deleting it.";
+  Future<Group> createGroup(String name) async {
+    for (var attempt = 0; attempt < 6; attempt++) {
+      try {
+        final row = await _client
+            .from('groups')
+            .insert({
+              'name': name.trim(),
+              'color_value': kGroupPalette[groups.length % kGroupPalette.length],
+              'invite_code': _randomInviteCode(),
+              'created_by': meId,
+            })
+            .select()
+            .single();
+        await _client.from('group_members').insert({'group_id': row['id'], 'user_id': meId});
+        return Group.fromRow(row, [meId]);
+      } on PostgrestException catch (e) {
+        if (e.code == '23505' && attempt < 5) continue;
+        rethrow;
+      }
     }
-    groups.removeWhere((g) => g.id == groupId);
-    expenses.removeWhere((e) => e.groupId == groupId);
-    settlements.removeWhere((s) => s.groupId == groupId);
-    _store.saveGroups(groups);
-    _store.saveExpenses(expenses);
-    _store.saveSettlements(settlements);
-    notifyListeners();
-    return null;
+    throw Exception('Could not create the group. Try again.');
+  }
+
+  /// Throws with a friendly message on an invalid code.
+  Future<void> joinGroupByCode(String code) async {
+    try {
+      await _client.rpc('join_group_by_code', params: {'p_code': code.trim()});
+    } on PostgrestException {
+      throw Exception('That invite code doesn\'t match any group.');
+    }
+  }
+
+  Future<void> renameGroup(String groupId, String name) async {
+    await _client.from('groups').update({'name': name.trim()}).eq('id', groupId);
+  }
+
+  Future<void> leaveGroup(String groupId) async {
+    await _client.from('group_members').delete().eq('group_id', groupId).eq('user_id', meId);
   }
 
   // --- Expenses -----------------------------------------------------
 
-  Expense addExpense({
-    String? groupId,
+  Future<void> addExpense({
+    required String groupId,
     required String description,
     required double amount,
     required String paidById,
@@ -175,12 +179,11 @@ class AppStore extends ChangeNotifier {
     required List<String> participantIds,
     ExpenseCategory category = ExpenseCategory.general,
     List<dynamic>? items,
-    DateTime? date,
-  }) {
+  }) async {
     final expense = Expense(
-      id: _uuid.v4(),
+      id: '',
       groupId: groupId,
-      description: description.trim(),
+      description: description,
       amount: amount,
       paidById: paidById,
       splitType: splitType,
@@ -188,61 +191,33 @@ class AppStore extends ChangeNotifier {
       participantIds: participantIds,
       category: category,
       items: items?.cast() ?? [],
-      date: date,
     );
-    expenses.add(expense);
-    _store.saveExpenses(expenses);
-    notifyListeners();
-    return expense;
+    await _client.from('expenses').insert({...expense.toRow(), 'created_by': meId});
   }
 
-  void updateExpense(Expense expense) {
-    final i = expenses.indexWhere((e) => e.id == expense.id);
-    if (i == -1) return;
-    expenses[i] = expense;
-    _store.saveExpenses(expenses);
-    notifyListeners();
+  Future<void> updateExpense(Expense expense) async {
+    await _client.from('expenses').update(expense.toRow()).eq('id', expense.id);
   }
 
-  void deleteExpense(String id) {
-    expenses.removeWhere((e) => e.id == id);
-    _store.saveExpenses(expenses);
-    notifyListeners();
+  Future<void> deleteExpense(String id) async {
+    await _client.from('expenses').delete().eq('id', id);
   }
 
   // --- Settlements ----------------------------------------------------
 
-  Settlement addSettlement({
-    String? groupId,
+  Future<void> addSettlement({
+    required String groupId,
     required String fromId,
     required String toId,
     required double amount,
     String note = '',
-  }) {
-    final settlement = Settlement(
-      id: _uuid.v4(),
-      groupId: groupId,
-      fromId: fromId,
-      toId: toId,
-      amount: amount,
-      note: note,
-    );
-    settlements.add(settlement);
-    _store.saveSettlements(settlements);
-    notifyListeners();
-    return settlement;
-  }
-
-  void deleteSettlement(String id) {
-    settlements.removeWhere((s) => s.id == id);
-    _store.saveSettlements(settlements);
-    notifyListeners();
+  }) async {
+    final settlement = Settlement(id: '', groupId: groupId, fromId: fromId, toId: toId, amount: amount, note: note);
+    await _client.from('settlements').insert({...settlement.toRow(), 'created_by': meId});
   }
 
   // --- Balances -------------------------------------------------------
 
-  /// Amount [b] owes [a], scoped to a single group. Negative means [a]
-  /// owes [b].
   double _pairBalance(String a, String b, Iterable<Expense> exps, Iterable<Settlement> setts) {
     double bal = 0;
     for (final e in exps) {
@@ -263,21 +238,29 @@ class AppStore extends ChangeNotifier {
         settlements.where((s) => s.groupId == groupId),
       );
 
-  /// Net balance between two people across every group and every direct
-  /// expense/settlement between them - what Splitwise shows as the
-  /// friend-level balance.
+  /// Net balance between two people across every group they share.
   double pairBalanceGlobal(String a, String b) => _pairBalance(a, b, expenses, settlements);
 
-  double friendBalance(String friendId) => pairBalanceGlobal(kMeId, friendId);
+  double friendBalance(String friendId) => pairBalanceGlobal(meId, friendId);
 
-  double overallNetForMe() => friends.fold(0.0, (sum, f) => sum + friendBalance(f.id));
+  /// Every friend (any other user sharing at least one group with you) and
+  /// your aggregate balance with them.
+  Map<String, double> friendBalances() {
+    final ids = <String>{};
+    for (final g in groups) {
+      ids.addAll(g.memberIds.where((m) => m != meId));
+    }
+    return {for (final id in ids) id: friendBalance(id)};
+  }
+
+  double overallNetForMe() => friendBalances().values.fold(0.0, (a, b) => a + b);
 
   Map<String, double> groupMemberBalancesForMe(String groupId) {
     final g = groupById(groupId);
     if (g == null) return {};
     return {
       for (final m in g.memberIds)
-        if (m != kMeId) m: pairBalanceInGroup(kMeId, m, groupId),
+        if (m != meId) m: pairBalanceInGroup(meId, m, groupId),
     };
   }
 

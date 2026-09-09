@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../models/expense.dart';
-import '../../models/person.dart';
 import '../../models/settlement.dart';
 import '../../state/app_scope.dart';
 import '../../utils/category_icons.dart';
@@ -47,6 +47,13 @@ class GroupDetailScreen extends StatelessWidget {
       appBar: AppBar(
         title: Text(group.name, maxLines: 1, overflow: TextOverflow.ellipsis),
         actions: [
+          IconButton(
+            tooltip: 'Invite a colleague',
+            icon: const Icon(Icons.person_add_alt_1_outlined),
+            onPressed: () => Share.share(
+              'Join "${group.name}" on OfficeSplit — enter this invite code in the app: ${group.inviteCode}',
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.settings_outlined),
             onPressed: () => Navigator.of(context).push(
@@ -187,9 +194,9 @@ class _ExpenseRow extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final currency = CurrencyScope.of(context);
     final payer = store.personById(expense.paidById);
-    final me = expense.shareOf(kMeId);
-    final isPayer = expense.paidById == kMeId;
-    final involved = expense.participantIds.contains(kMeId) || isPayer;
+    final me = expense.shareOf(store.meId);
+    final isPayer = expense.paidById == store.meId;
+    final involved = expense.participantIds.contains(store.meId) || isPayer;
     final yourEffect = isPayer ? expense.amount - me : -me;
 
     return Padding(
@@ -230,8 +237,8 @@ class _SettlementRow extends StatelessWidget {
     final currency = CurrencyScope.of(context);
     final from = store.personById(settlement.fromId);
     final to = store.personById(settlement.toId);
-    final fromName = settlement.fromId == kMeId ? 'You' : (from?.name ?? '—');
-    final toName = settlement.toId == kMeId ? 'you' : (to?.name ?? '—');
+    final fromName = settlement.fromId == store.meId ? 'You' : (from?.name ?? '—');
+    final toName = settlement.toId == store.meId ? 'you' : (to?.name ?? '—');
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),

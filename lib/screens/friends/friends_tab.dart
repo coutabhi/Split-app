@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../models/person.dart';
 import '../../state/app_scope.dart';
 import '../../widgets/balance_label.dart';
 import '../../widgets/currency_scope.dart';
@@ -9,30 +10,14 @@ import 'friend_detail_screen.dart';
 class FriendsTab extends StatelessWidget {
   const FriendsTab({super.key});
 
-  Future<void> _addFriend(BuildContext context) async {
-    final controller = TextEditingController();
-    final name = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add a friend'),
-        content: TextField(controller: controller, autofocus: true, textCapitalization: TextCapitalization.words),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, controller.text), child: const Text('Add')),
-        ],
-      ),
-    );
-    if (name != null && name.trim().isNotEmpty && context.mounted) {
-      AppScope.of(context).addFriend(name);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final store = AppScope.of(context);
     final scheme = Theme.of(context).colorScheme;
     final currency = CurrencyScope.of(context);
-    final friends = store.friends;
+    final balances = store.friendBalances();
+    final friends = balances.keys.map((id) => store.personById(id)).whereType<Person>().toList()
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     final overall = store.overallNetForMe();
 
     return Scaffold(
@@ -48,28 +33,22 @@ class FriendsTab extends StatelessWidget {
                       width: 96,
                       height: 96,
                       decoration: BoxDecoration(color: scheme.primaryContainer, shape: BoxShape.circle),
-                      child: Icon(Icons.person_add_alt_1, size: 44, color: scheme.onPrimaryContainer),
+                      child: Icon(Icons.people_outline, size: 44, color: scheme.onPrimaryContainer),
                     ),
                     const SizedBox(height: 20),
-                    Text('No friends yet', style: Theme.of(context).textTheme.titleLarge),
+                    Text('No shared groups yet', style: Theme.of(context).textTheme.titleLarge, textAlign: TextAlign.center),
                     const SizedBox(height: 8),
                     Text(
-                      'Add a friend to track what you owe each other, group or no group.',
+                      'Anyone who joins one of your groups shows up here with a running balance.',
                       style: TextStyle(color: scheme.onSurfaceVariant),
                       textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 24),
-                    FilledButton.icon(
-                      onPressed: () => _addFriend(context),
-                      icon: const Icon(Icons.add),
-                      label: const Text('Add a friend'),
                     ),
                   ],
                 ),
               ),
             )
           : ListView(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
               children: [
                 if (overall.abs() > 0.005)
                   Padding(
@@ -92,7 +71,7 @@ class FriendsTab extends StatelessWidget {
                         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                         leading: PersonAvatar(person: friend),
                         title: Text(friend.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
-                        trailing: BalanceLabel(amount: store.friendBalance(friend.id)),
+                        trailing: BalanceLabel(amount: balances[friend.id]!),
                         onTap: () => Navigator.of(context).push(
                           MaterialPageRoute(builder: (_) => FriendDetailScreen(friendId: friend.id)),
                         ),
@@ -101,11 +80,6 @@ class FriendsTab extends StatelessWidget {
                   ),
               ],
             ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _addFriend(context),
-        icon: const Icon(Icons.add),
-        label: const Text('Add friend'),
-      ),
     );
   }
 }

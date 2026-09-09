@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../../models/person.dart';
 import '../../state/app_scope.dart';
 import '../../utils/category_icons.dart';
 import '../../widgets/currency_scope.dart';
@@ -52,7 +51,7 @@ class ExpenseDetailScreen extends StatelessWidget {
                 ),
               );
               if (confirmed == true) {
-                store.deleteExpense(expenseId);
+                await store.deleteExpense(expenseId);
                 if (context.mounted) Navigator.of(context).pop();
               }
             },
@@ -77,7 +76,7 @@ class ExpenseDetailScreen extends StatelessWidget {
                 const SizedBox(height: 12),
                 Text(currency.format(expense.amount), style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w800)),
                 Text(
-                  '${expense.paidById == kMeId ? 'You' : payer?.name ?? '—'} paid',
+                  '${expense.paidById == store.meId ? 'You' : payer?.name ?? '—'} paid',
                   style: TextStyle(color: scheme.onSurfaceVariant),
                 ),
               ],
@@ -95,7 +94,7 @@ class ExpenseDetailScreen extends StatelessWidget {
                     contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                     leading: PersonAvatar(person: store.personById(id)!),
                     title: Text(
-                      id == kMeId ? 'You' : store.personById(id)!.name,
+                      id == store.meId ? 'You' : store.personById(id)!.name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 
-import '../../models/person.dart';
 import '../../state/app_scope.dart';
 import '../../widgets/person_avatar.dart';
 
@@ -17,50 +18,42 @@ class _EditGroupScreenState extends State<EditGroupScreen> {
   late final _nameController = TextEditingController(
     text: AppScope.of(context).groupById(widget.groupId)?.name ?? '',
   );
-  final _friendController = TextEditingController();
+  bool _leaving = false;
 
   @override
   void dispose() {
     _nameController.dispose();
-    _friendController.dispose();
     super.dispose();
   }
 
-  void _addFriend() {
-    final name = _friendController.text.trim();
-    if (name.isEmpty) return;
-    final store = AppScope.of(context);
-    final group = store.groupById(widget.groupId);
-    if (group == null) return;
-    final person = store.addFriend(name);
-    store.updateGroupMembers(widget.groupId, [...group.memberIds, person.id]);
-    _friendController.clear();
-    setState(() {});
-  }
-
-  Future<void> _delete() async {
+  Future<void> _leave() async {
     final store = AppScope.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete group?'),
-        content: const Text('This removes the group and its expense history. This can\'t be undone.'),
+        title: const Text('Leave group?'),
+        content: const Text('You\'ll stop seeing this group\'s expenses. Anyone with the invite code can add you back.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Leave')),
         ],
       ),
     );
     if (confirmed != true) return;
-    final error = store.deleteGroup(widget.groupId);
-    if (!mounted) return;
-    if (error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
-      return;
+    setState(() => _leaving = true);
+    try {
+      await store.leaveGroup(widget.groupId);
+      if (mounted) {
+        Navigator.of(context)
+          ..pop()
+          ..pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _leaving = false);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not leave the group. Try again.')));
+      }
     }
-    Navigator.of(context)
-      ..pop()
-      ..pop();
   }
 
   @override
@@ -89,63 +82,62 @@ class _EditGroupScreenState extends State<EditGroupScreen> {
           const SizedBox(height: 8),
           for (final id in group.memberIds)
             if (store.personById(id) != null)
-              _MemberTile(
-                person: store.personById(id)!,
-                isMe: id == kMeId,
-                onRemove: id == kMeId
-                    ? null
-                    : () => store.updateGroupMembers(
-                          widget.groupId,
-                          group.memberIds.where((m) => m != id).toList(),
-                        ),
-              ),
-          const SizedBox(height: 16),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _friendController,
-                  textCapitalization: TextCapitalization.words,
-                  decoration: const InputDecoration(hintText: 'Add a person'),
-                  onSubmitted: (_) => _addFriend(),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: PersonAvatar(person: store.personById(id)!),
+                title: Text(
+                  id == store.meId ? '${store.personById(id)!.name} (you)' : store.personById(id)!.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-              const SizedBox(width: 10),
-              FilledButton(
-                onPressed: _addFriend,
-                style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18)),
-                child: const Icon(Icons.add),
+          const SizedBox(height: 20),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Invite code', style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13)),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          group.inviteCode,
+                          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, letterSpacing: 2),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Copy',
+                        icon: const Icon(Icons.copy_outlined),
+                        onPressed: () {
+                          Clipboard.setData(ClipboardData(text: group.inviteCode));
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Copied')));
+                        },
+                      ),
+                      IconButton(
+                        tooltip: 'Share',
+                        icon: const Icon(Icons.share_outlined),
+                        onPressed: () => Share.share(
+                          'Join "${group.name}" on OfficeSplit — enter this invite code in the app: ${group.inviteCode}',
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
           const SizedBox(height: 32),
           OutlinedButton.icon(
-            onPressed: _delete,
+            onPressed: _leaving ? null : _leave,
             style: OutlinedButton.styleFrom(foregroundColor: scheme.error, side: BorderSide(color: scheme.error)),
-            icon: const Icon(Icons.delete_outline),
-            label: const Text('Delete group'),
+            icon: const Icon(Icons.logout),
+            label: const Text('Leave group'),
           ),
         ],
       ),
-    );
-  }
-}
-
-class _MemberTile extends StatelessWidget {
-  const _MemberTile({required this.person, required this.isMe, this.onRemove});
-
-  final Person person;
-  final bool isMe;
-  final VoidCallback? onRemove;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: PersonAvatar(person: person),
-      title: Text(isMe ? '${person.name} (you)' : person.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-      trailing: onRemove == null ? null : IconButton(icon: const Icon(Icons.close), onPressed: onRemove),
     );
   }
 }

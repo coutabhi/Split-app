@@ -6,6 +6,7 @@ import '../../widgets/currency_scope.dart';
 import '../../widgets/group_avatar.dart';
 import 'create_group_screen.dart';
 import 'group_detail_screen.dart';
+import 'join_group_screen.dart';
 
 class GroupsTab extends StatelessWidget {
   const GroupsTab({super.key});
@@ -17,9 +18,18 @@ class GroupsTab extends StatelessWidget {
     final overall = store.overallNetForMe();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Groups')),
+      appBar: AppBar(
+        title: const Text('Groups'),
+        actions: [
+          IconButton(
+            tooltip: 'Join a group',
+            icon: const Icon(Icons.group_add_outlined),
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const JoinGroupScreen())),
+          ),
+        ],
+      ),
       body: store.groups.isEmpty
-          ? _EmptyGroups(onCreate: () => _createGroup(context))
+          ? _EmptyGroups(onCreate: () => _createGroup(context), onJoin: () => _joinGroup(context))
           : ListView(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
               children: [
@@ -87,6 +97,10 @@ class GroupsTab extends StatelessWidget {
   void _createGroup(BuildContext context) {
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CreateGroupScreen()));
   }
+
+  void _joinGroup(BuildContext context) {
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const JoinGroupScreen()));
+  }
 }
 
 /// Small helper so we can format a currency amount inside a TextSpan
@@ -96,8 +110,9 @@ class CurrencyScopeAmount {
 }
 
 class _EmptyGroups extends StatelessWidget {
-  const _EmptyGroups({required this.onCreate});
+  const _EmptyGroups({required this.onCreate, required this.onJoin});
   final VoidCallback onCreate;
+  final VoidCallback onJoin;
 
   @override
   Widget build(BuildContext context) {
@@ -124,6 +139,8 @@ class _EmptyGroups extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             FilledButton.icon(onPressed: onCreate, icon: const Icon(Icons.add), label: const Text('Start a group')),
+            const SizedBox(height: 8),
+            TextButton.icon(onPressed: onJoin, icon: const Icon(Icons.group_add_outlined), label: const Text('Join a group with a code')),
           ],
         ),
       ),

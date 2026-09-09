@@ -1,10 +1,10 @@
 /// A recorded payment from one person to another that pays down a debt
-/// (Splitwise's "Settle up"). Belongs to a group, or is a direct
-/// friend-to-friend settlement when [groupId] is null.
+/// within a group (Splitwise's "Settle up"), backed by Supabase's
+/// `settlements` table.
 class Settlement {
   Settlement({
     required this.id,
-    this.groupId,
+    required this.groupId,
     required this.fromId,
     required this.toId,
     required this.amount,
@@ -13,30 +13,28 @@ class Settlement {
   }) : date = date ?? DateTime.now();
 
   final String id;
-  String? groupId;
-  String fromId;
-  String toId;
-  double amount;
-  DateTime date;
-  String note;
+  final String groupId;
+  final String fromId;
+  final String toId;
+  final double amount;
+  final DateTime date;
+  final String note;
 
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'groupId': groupId,
-        'fromId': fromId,
-        'toId': toId,
+  Map<String, dynamic> toRow() => {
+        'group_id': groupId,
+        'from_id': fromId,
+        'to_id': toId,
         'amount': amount,
-        'date': date.toIso8601String(),
         'note': note,
       };
 
-  factory Settlement.fromJson(Map<String, dynamic> json) => Settlement(
-        id: json['id'] as String,
-        groupId: json['groupId'] as String?,
-        fromId: json['fromId'] as String,
-        toId: json['toId'] as String,
-        amount: (json['amount'] as num).toDouble(),
-        date: DateTime.tryParse(json['date'] as String? ?? '') ?? DateTime.now(),
-        note: json['note'] as String? ?? '',
+  factory Settlement.fromRow(Map<String, dynamic> row) => Settlement(
+        id: row['id'] as String,
+        groupId: row['group_id'] as String,
+        fromId: row['from_id'] as String,
+        toId: row['to_id'] as String,
+        amount: (row['amount'] as num).toDouble(),
+        date: DateTime.tryParse(row['date'] as String? ?? '') ?? DateTime.now(),
+        note: row['note'] as String? ?? '',
       );
 }

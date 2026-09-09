@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../models/expense.dart';
-import '../../models/person.dart';
 import '../../models/settlement.dart';
 import '../../state/app_scope.dart';
 import '../../utils/category_icons.dart';
@@ -65,13 +64,11 @@ class _ActivityExpenseRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final store = AppScope.of(context);
     final scheme = Theme.of(context).colorScheme;
-    final isPayer = expense.paidById == kMeId;
-    final me = expense.shareOf(kMeId);
-    final involved = expense.participantIds.contains(kMeId) || isPayer;
+    final isPayer = expense.paidById == store.meId;
+    final me = expense.shareOf(store.meId);
+    final involved = expense.participantIds.contains(store.meId) || isPayer;
     final yourEffect = isPayer ? expense.amount - me : -me;
-    final context_ = expense.groupId != null
-        ? store.groupById(expense.groupId!)?.name
-        : (expense.participantIds.where((id) => id != kMeId).map((id) => store.personById(id)?.name).whereType<String>().firstOrNull);
+    final context_ = store.groupById(expense.groupId)?.name;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -109,8 +106,8 @@ class _ActivitySettlementRow extends StatelessWidget {
     final store = AppScope.of(context);
     final scheme = Theme.of(context).colorScheme;
     final currency = CurrencyScope.of(context);
-    final fromName = settlement.fromId == kMeId ? 'You' : (store.personById(settlement.fromId)?.name ?? '—');
-    final toName = settlement.toId == kMeId ? 'you' : (store.personById(settlement.toId)?.name ?? '—');
+    final fromName = settlement.fromId == store.meId ? 'You' : (store.personById(settlement.fromId)?.name ?? '—');
+    final toName = settlement.toId == store.meId ? 'you' : (store.personById(settlement.toId)?.name ?? '—');
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -129,8 +126,4 @@ class _ActivitySettlementRow extends StatelessWidget {
       ),
     );
   }
-}
-
-extension _FirstOrNull<T> on Iterable<T> {
-  T? get firstOrNull => isEmpty ? null : first;
 }
