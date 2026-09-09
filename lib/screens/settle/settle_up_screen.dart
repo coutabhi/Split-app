@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../state/app_scope.dart';
 import '../../state/app_store.dart';
+import '../../utils/error_text.dart';
 import '../../widgets/currency_scope.dart';
 import '../../widgets/person_avatar.dart';
 
@@ -41,8 +42,7 @@ class SettleUpScreen extends StatelessWidget {
       if (context.mounted) Navigator.of(context).pop();
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('Could not record the payment. Try again.')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(describeError(e))));
       }
     }
   }

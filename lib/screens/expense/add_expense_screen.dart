@@ -6,6 +6,7 @@ import '../../models/expense.dart';
 import '../../models/person.dart';
 import '../../state/app_scope.dart';
 import '../../utils/category_icons.dart';
+import '../../utils/error_text.dart';
 import '../../widgets/currency_scope.dart';
 import '../../widgets/person_avatar.dart';
 import '../steps/item_editor_sheet.dart';
@@ -223,7 +224,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       if (mounted) {
         setState(() {
           _saving = false;
-          _error = 'Could not save. Check your connection and try again.';
+          _error = describeError(e);
         });
       }
     }

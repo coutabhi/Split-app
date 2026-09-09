@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../state/app_scope.dart';
+import '../../utils/error_text.dart';
 import '../../widgets/person_avatar.dart';
 
 class EditGroupScreen extends StatefulWidget {
@@ -51,7 +52,7 @@ class _EditGroupScreenState extends State<EditGroupScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _leaving = false);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not leave the group. Try again.')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(describeError(e))));
       }
     }
   }

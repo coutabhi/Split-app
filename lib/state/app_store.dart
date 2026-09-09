@@ -8,6 +8,7 @@ import '../models/expense.dart';
 import '../models/group.dart';
 import '../models/person.dart';
 import '../models/settlement.dart';
+import '../utils/error_text.dart';
 
 class SettleSuggestion {
   SettleSuggestion({required this.fromId, required this.toId, required this.amount});
@@ -64,25 +65,25 @@ class AppStore extends ChangeNotifier {
     _profilesSub = _client.from('profiles').stream(primaryKey: ['id']).listen((rows) {
       people = rows.map(Person.fromRow).toList();
       _markReady('profiles');
-    }, onError: (_) => _markReady('profiles'));
+    }, onError: (e) => _markReady('profiles', error: e));
     _groupsSub = _client.from('groups').stream(primaryKey: ['id']).listen((rows) {
       _groupRows = rows;
       _rebuildGroups();
       _markReady('groups');
-    }, onError: (_) => _markReady('groups'));
+    }, onError: (e) => _markReady('groups', error: e));
     _membersSub = _client.from('group_members').stream(primaryKey: ['group_id', 'user_id']).listen((rows) {
       _memberRows = rows;
       _rebuildGroups();
       _markReady('group_members');
-    }, onError: (_) => _markReady('group_members'));
+    }, onError: (e) => _markReady('group_members', error: e));
     _expensesSub = _client.from('expenses').stream(primaryKey: ['id']).listen((rows) {
       expenses = rows.map(Expense.fromRow).toList();
       _markReady('expenses');
-    }, onError: (_) => _markReady('expenses'));
+    }, onError: (e) => _markReady('expenses', error: e));
     _settlementsSub = _client.from('settlements').stream(primaryKey: ['id']).listen((rows) {
       settlements = rows.map(Settlement.fromRow).toList();
       _markReady('settlements');
-    }, onError: (_) => _markReady('settlements'));
+    }, onError: (e) => _markReady('settlements', error: e));
   }
 
   void _rebuildGroups() {
@@ -95,8 +96,11 @@ class AppStore extends ChangeNotifier {
     }).toList();
   }
 
-  void _markReady(String stream) {
+  void _markReady(String stream, {Object? error}) {
     _readyStreams.add(stream);
+    if (error != null && !loaded) {
+      loadError = "Couldn't load $stream: ${describeError(error)}";
+    }
     if (!loaded && _readyStreams.length == 5) {
       loaded = true;
       loadError = null;
@@ -169,11 +173,7 @@ class AppStore extends ChangeNotifier {
 
   /// Throws with a friendly message on an invalid code.
   Future<void> joinGroupByCode(String code) async {
-    try {
-      await _client.rpc('join_group_by_code', params: {'p_code': code.trim()});
-    } on PostgrestException {
-      throw Exception('That invite code doesn\'t match any group.');
-    }
+    await _client.rpc('join_group_by_code', params: {'p_code': code.trim()});
   }
 
   Future<void> renameGroup(String groupId, String name) async {

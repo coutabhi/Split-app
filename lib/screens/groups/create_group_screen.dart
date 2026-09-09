@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../state/app_scope.dart';
+import '../../utils/error_text.dart';
 import 'group_detail_screen.dart';
 
 class CreateGroupScreen extends StatefulWidget {
@@ -39,7 +40,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
         );
       }
     } catch (e) {
-      setState(() => _error = 'Could not create the group. Check your connection and try again.');
+      setState(() => _error = describeError(e));
     } finally {
       if (mounted) setState(() => _loading = false);
     }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../state/app_scope.dart';
+import '../../utils/error_text.dart';
 
 class JoinGroupScreen extends StatefulWidget {
   const JoinGroupScreen({super.key});
@@ -34,7 +35,7 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
       await AppScope.of(context).joinGroupByCode(code);
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
-      setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+      setState(() => _error = describeError(e));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
